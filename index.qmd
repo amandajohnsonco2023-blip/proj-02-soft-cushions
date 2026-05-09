@@ -1,0 +1,532 @@
+---
+title: "Resolutions Tracker"
+format:
+  dashboard:
+    theme: flatly
+    scrolling: true
+server: shiny
+---
+
+```{r}
+#| label: setup-test-chunk
+#| include: false
+#| message: false
+#| warning: false
+
+library(shiny)
+library(plotly)
+library(lubridate)
+library(bslib)
+library(bsicons)
+library(tidyverse)
+
+sample_df <- read.csv("data/sample_user_health_data.csv") |>
+  mutate(date = as.Date(date))
+```
+
+# {.sidebar}
+
+```{r}
+br()
+radioButtons(
+  "auth_mode",
+  label = NULL,
+  choices = c("Login", "Sign Up"),
+  selected = "Login",
+  inline = TRUE
+)
+br()
+
+conditionalPanel(
+  condition = "input.auth_mode == 'Login'",
+  textInput("login_user", "Username"),
+  passwordInput("login_pass", "Password"),
+  br(),
+  actionButton("login_btn", "Log in", width = "100%", class = "btn-primary"),
+  br(),
+  uiOutput("login_status")
+)
+
+conditionalPanel(
+  condition = "input.auth_mode == 'Sign Up'",
+  textInput("signup_user", "Choose a username"),
+  passwordInput("signup_pass", "Choose a password"),
+  passwordInput("signup_pass2", "Confirm password"),
+  br(),
+  actionButton(
+    "signup_btn",
+    "Create account",
+    width = "100%",
+    class = "btn-success"
+  ),
+  br(),
+  uiOutput("signup_status")
+)
+```
+
+# Instructions
+
+## Row
+
+::: {.card}
+
+### Welcome to the Resolutions Tracker
+
+This app helps you stay accountable to your health goals by logging daily habits and visualizing your progress over time. Log your data each day, set personal targets, and watch your consistency build through interactive charts and milestone badges.
+
+### Product Purpose
+
+The purpose of the Resolutions Tracker is to help users turn health goals into consistent daily habits. Instead of only setting broad resolutions, users can log specific behaviors, track patterns over time, and receive feedback through charts, goal cards, calendars, and badges. The app is designed to make progress visible, achievable, and motivating.
+
+### Intended Audience
+
+This app is intended for people who want a simple and personalized way to monitor their wellness routines. The primary audience includes students and young adults balancing busy schedules, but it can also support anyone working toward health-related goals such as drinking more water, exercising regularly, sleeping more consistently, eating more nutritious meals, or building mindfulness habits.
+
+---
+
+### Getting Started
+
+**1. Create an account**
+Use the sidebar to sign up with a username and password. You will be logged in immediately.
+
+**2. Set your goals**
+Go to the **Goals** tab and customize your daily targets (exercise minutes, water intake, sleep hours, etc.). Hit *Save My Goals,* this also earns your first badge.
+
+**3. Log your first entry**
+Go to **Log Entry**, fill in today's data, and press *Save Entry*. You don't need to fill in every field, just log what you can.
+
+**4. Explore your dashboard**
+Visit **Your Tracker** to see your charts and habit calendar update as your data grows.
+
+---
+
+### What You Can Track
+
+| Category | Metrics |
+|----------|---------|
+| 🏃 Activity | Exercise minutes, type, intensity, steps |
+| 🍎 Nutrition | Calories, protein, carbs, fat, fruit & vegetable servings, water cups |
+| 🌙 Sleep | Hours of sleep, sleep quality (1–5) |
+| 🧘 Wellness | Meditation minutes, pages read, weight, muscle percentage |
+
+---
+
+### App Tabs
+
+| Tab | What it does |
+|-----|-------------|
+| 📊 Your Tracker | Personal dashboard with goal cards, habit calendar, and charts |
+| 📝 Log Entry | Daily input form (re-submitting a date overwrites that day's entry) |
+| 🎯 Goals | Set and update your personal daily targets |
+| 🏅 Badges | See earned badges and what's left to unlock |
+| 👤 Sample User | Browse a fully populated 6-month demo dashboard |
+| ℹ️ Instructions | This page |
+
+---
+
+### Importing from Strava
+
+If you already use Strava to track your workouts, you can import your activity history directly into the Resolutions Tracker instead of logging exercise entries by hand.
+
+**What gets imported**
+
+The importer pulls three fields from your Strava export and maps them into your log:
+
+| Strava field | Maps to |
+|---|---|
+| Activity Date | Date |
+| Elapsed Time | Exercise minutes |
+| Activity Type | Exercise type |
+
+Activity types are mapped automatically: Yoga becomes Flexibility, Weight Training and Workout become Strength, and everything else (runs, rides, hikes, swims, etc.) becomes Cardio. All other fields such as calories, sleep, and water will be left blank for those entries and can be filled in manually afterward.
+
+**How to export your data from Strava**
+
+1. Log in to Strava and go to **Settings**
+2. Select **My Account** from the left menu
+3. Scroll to **Download or Delete Your Account** and click **Get Started**
+4. Under **Download Request**, click **Request Your Archive**
+5. Strava will email you a download link — this may take a few minutes
+6. Download and unzip the file, then locate **activities.csv** inside
+
+**How to import**
+
+1. Log in to the Resolutions Tracker
+2. Go to the **Import from Strava** tab
+3. Upload your **activities.csv** file using the file picker
+4. Preview the activities that will be added
+5. Click **Add these to my log** to confirm
+
+Dates already in your log will not be overwritten — only new dates are added.
+
+---
+
+### Badges
+
+There are 8 badges to earn, awarded automatically when you hit a milestone:
+
+| Badge | How to earn it |
+|-------|---------------|
+| 👣 First Step | Log your very first entry |
+| 🎯 Goal Setter | Save your personal goals for the first time |
+| ⭐ Perfect Day | Meet every goal in a single day |
+| 🗓️ 7-Day Streak | Log data for 7 consecutive days |
+| 💧 Hydration Hero | Hit your water goal 7 days in a row |
+| 🌙 Sleep Champion | Meet your sleep goal 7 nights in a row |
+| 🏃 Exercise Streak | Hit your exercise goal 7 days in a row |
+| 📅 30-Day Logger | Log data for 30 total days |
+
+---
+
+### Tips
+
+- Log at the same time each day, right after dinner or before bed works well.
+- Start with achievable goals, then raise them once you've hit a 7-day streak.
+- The habit calendar uses color to summarize each day: **green** = all goals met, **gold** = partial, **grey** = not met.
+- Partial entries still count toward streaks and badges, logging something is always better than nothing!
+- Check the Goal Completion Overview cards weekly to spot which habits need the most attention.
+
+:::
+
+
+# Your Tracker
+
+## Row {height="70px"}
+
+```{r}
+#| padding: 0
+uiOutput("page_title")
+```
+
+## Row
+
+```{r}
+#| padding: 12
+uiOutput("user_goal_overview")
+```
+
+## Row
+
+### Column {width="50%"}
+
+```{r}
+#| title: "Sleep Quality Heatmap"
+#| height: 400
+plotOutput("user_sleep_heatmap_plot")
+```
+
+### Column {width="50%"}
+
+```{r}
+#| title: "Water Intake"
+#| height: 400
+plotlyOutput("user_water_chart_plot")
+```
+
+## Row
+
+### Column {width="50%"}
+
+```{r}
+#| title: "Fruit & Vegetable Intake"
+#| height: 400
+plotlyOutput("user_produce_chart_plot")
+```
+
+### Column {width="50%"}
+
+```{r}
+#| title: "Habit Tracker Calendar"
+#| height: 400
+plotOutput("user_habit_calendar")
+```
+
+## Row
+
+```{r}
+#| padding: 12
+uiOutput("user_overall_summary")
+```
+
+# Log Entry
+
+## Row {height="70px"}
+
+```{r}
+#| padding: 0
+uiOutput("log_title")
+```
+
+## Row
+
+```{r}
+#| padding: 20
+uiOutput("log_form")
+uiOutput("feedback")
+```
+
+# Goals
+
+## Row {height="70px"}
+
+```{r}
+#| padding: 0
+uiOutput("goals_title")
+```
+
+## Row
+
+```{r}
+#| padding: 16
+uiOutput("goals_form")
+```
+
+# Badges
+
+## Row {height="70px"}
+
+```{r}
+#| padding: 0
+uiOutput("badges_title")
+```
+
+## Row
+
+```{r}
+#| padding: 20
+uiOutput("badges_display")
+```
+
+# Sample User
+
+## Row {height="70px"}
+
+```{r}
+#| padding: 0
+uiOutput("sample_title")
+```
+
+## Row
+
+```{r}
+#| padding: 12
+uiOutput("sample_goal_overview")
+```
+
+## Row
+
+### Column {width="50%"}
+
+```{r}
+#| title: "Sleep Quality Heatmap"
+#| height: 400
+plotOutput("sample_sleep_heatmap_plot")
+```
+
+### Column {width="50%"}
+
+```{r}
+#| title: "Water Intake"
+#| height: 400
+plotlyOutput("sample_water_chart_plot")
+```
+
+## Row
+
+### Column {width="50%"}
+
+```{r}
+#| title: "Fruit & Vegetable Intake"
+#| height: 400
+plotlyOutput("sample_produce_chart_plot")
+```
+
+### Column {width="50%"}
+
+```{r}
+#| title: "Habit Tracker Calendar"
+#| height: 400
+plotOutput("sample_habit_calendar")
+```
+
+## Row
+
+```{r}
+#| padding: 12
+uiOutput("sample_overall_summary")
+```
+
+# Import from Strava
+
+## Row {height="70px"}
+
+```{r}
+#| padding: 0
+uiOutput("strava_title")
+```
+
+## Row
+
+```{r}
+#| padding: 20
+uiOutput("strava_ui")
+uiOutput("strava_feedback")
+```
+
+
+```{r}
+#| context: server
+library(plotly)
+library(tidyverse)
+library(bslib)
+library(bsicons)
+library(sodium)
+
+sample_df <- read.csv("data/sample_user_health_data.csv") |>
+  mutate(date = as.Date(date))
+
+source("app/authentication.R")
+source("app/goals.R")
+source("app/user_tracker.R")
+source("app/sample_user.R")
+source("app/badges.R")
+source("app/strava.R")
+
+# ── Auth state ────────────────────────────────────────────────────────────────
+logged_in <- reactiveVal(FALSE)
+current_user <- reactiveVal(NULL)
+log_version <- reactiveVal(0)
+goals_version <- reactiveVal(0)
+badge_version <- reactiveVal(0)
+
+user_data <- reactive({
+  req(logged_in())
+  log_version()
+  load_user_log(current_user())
+})
+
+# ── Strava tab ────────────────────────────────────────────────────────────────
+output$strava_title <- renderUI({
+  if (logged_in()) {
+    h2(paste("Import from Strava,", current_user()))
+  } else {
+    h2("Import from Strava")
+  }
+})
+
+output$strava_ui <- renderUI({
+  if (!logged_in()) {
+    div(
+      class = "alert alert-warning",
+      "Please log in to import your Strava data."
+    )
+  } else {
+    render_strava_ui()
+  }
+})
+
+strava_parsed <- reactive({
+  req(input$strava_file)
+  tryCatch(
+    {
+      df <- parse_strava_upload(input$strava_file$datapath)
+      validate(need(nrow(df) > 0, "No activities found in this file."))
+      df
+    },
+    error = function(e) {
+      validate(need(
+        FALSE,
+        "Could not read file. Please upload activities.csv exported from Strava."
+      ))
+    }
+  )
+})
+
+output$strava_preview_ui <- renderUI({
+  req(strava_parsed())
+  tagList(
+    hr(),
+    h4(paste(
+      "Found",
+      nrow(strava_parsed()),
+      "activities — preview of first 10:"
+    )),
+    tableOutput("strava_preview_table"),
+    br()
+  )
+})
+
+output$strava_preview_table <- renderTable({
+  head(strava_parsed(), 10)
+})
+
+output$strava_import_btn <- renderUI({
+  req(strava_parsed())
+  div(
+    style = "margin-bottom: 15px;",
+    actionButton(
+      "confirm_strava_import",
+      "Add these to my log",
+      class = "btn-success",
+      width = "200px"
+    )
+  )
+})
+
+observeEvent(input$confirm_strava_import, {
+  req(logged_in(), strava_parsed())
+
+  log_path <- user_log_path(current_user())
+  existing <- load_user_log(current_user())
+
+  new_entries <- strava_parsed() |>
+    mutate(
+      calories_eaten = NA_integer_,
+      water_cups_drank = NA_integer_,
+      hours_of_sleep = NA_real_,
+      pages_read = NA_integer_,
+      steps = NA_integer_,
+      fruit_servings = NA_integer_,
+      vegetable_servings = NA_integer_,
+      weight = NA_real_,
+      muscle_percentage = NA_real_,
+      intensity_of_exercise = NA_character_,
+      protein_grams = NA_integer_,
+      carb_grams = NA_integer_,
+      fat_grams = NA_integer_,
+      sleep_quality = NA_integer_,
+      meditation_minutes = NA_integer_
+    ) |>
+    # Only keep dates not already in the log
+    filter(!date %in% existing$date)
+
+  combined <- bind_rows(existing, new_entries) |>
+    arrange(date)
+
+  write.csv(combined, log_path, row.names = FALSE)
+  log_version(log_version() + 1)
+
+  output$strava_feedback <- renderUI({
+    div(
+      class = "alert alert-success",
+      paste0("✓ ", nrow(new_entries), " new Strava activities imported!")
+    )
+  })
+})
+
+# ── Call servers ──────────────────────────────────────────────────────────
+auth_server(input, output, session, logged_in, current_user)
+sample_user_server(input, output, session, sample_df)
+user_tracker_server(
+  input,
+  output,
+  session,
+  logged_in,
+  current_user,
+  user_data,
+  log_version,
+  badge_version
+)
+goals_server(input, output, session, logged_in, current_user, goals_version)
+badges_server(input, output, session, logged_in, current_user, badge_version)
+```
